@@ -6,9 +6,13 @@
 
 namespace seam_carving {
 
+const float SeamCarver::s_removal_energy_val_ = -100.f;
+
 SeamCarver::SeamCarver(const cv::Mat &input_image) {
   origin_image_ = input_image.clone();
   carved_image_ = input_image.clone();
+  removal_region_mask_ = cv::Mat::zeros(
+      origin_image_.rows, origin_image_.cols, CV_8UC1);
 }
 
 void SeamCarver::VerticalCarving(int num_seams) {
@@ -32,7 +36,7 @@ void SeamCarver::VerticalCarving(int num_seams) {
 void SeamCarver::HorizontalCarving(int num_seams) {
   for (int i = 0; i < num_seams; ++i) {
     FindHorizontalSeam(&cur_seam_);
-  #ifdef VIZ_DEBUG
+#ifdef VIZ_DEBUG
     // visualization for debugging
     cv::Mat seam_image = carved_image_.clone();
     for (int j = 0; j < carved_image_.cols; ++j) {
@@ -42,9 +46,13 @@ void SeamCarver::HorizontalCarving(int num_seams) {
     }
     cv::imshow("seam image", seam_image);
     cv::waitKey(1);
-  #endif
+#endif
     RemoveHorizontalSeam(cur_seam_);
+  }
 }
+
+void SeamCarver::SetRemovalMaskByRect(const cv::Rect &rect) {
+  removal_region_mask_(rect).setTo(255);
 }
 
 void SeamCarver::Reset() {
@@ -61,6 +69,18 @@ void SeamCarver::CalcEnergyMap() {
   cv::convertScaleAbs(sobel_y_map_, sobel_y_map_);
 
   cv::addWeighted(sobel_x_map_, 0.5, sobel_y_map_, 0.5, 0, energy_map_);
+
+  cv::Mat energy_map_float;
+  energy_map_.convertTo(energy_map_float, CV_32F);
+  energy_map_ = energy_map_float;
+  // consider removal mask
+  for (int i = 0; i < energy_map_.rows; ++i) {
+    for (int j = 0; j < energy_map_.cols; ++j) {
+      if (removal_region_mask_.at<uchar>(i, j) > 0) {
+        energy_map_.at<float>(i, j) = s_removal_energy_val_;
+      }
+    }
+  }
 
 #ifdef VIZ_DEBUG
   // visualization of the energy map
@@ -90,36 +110,34 @@ void SeamCarver::FindSeamWithDynamicProgramming(const cv::Mat &energy_map,
   const int r = energy_map.rows;
   const int c = energy_map.cols;
   dp_mat.clear();
-  dp_mat.resize(r, std::vector<int>(c, 0));
+  dp_mat.resize(r, std::vector<float>(c, 0.f));
   dp_path.clear();
   dp_path.resize(r, std::vector<int>(c, 0));
 
-  const uchar *data_ptr = energy_map.data;
   for (int j = 0; j < c; ++j) {
-    int energy = static_cast<int>(*(data_ptr + j));
-    dp_mat[0][j] = energy;
+    dp_mat[0][j] = energy_map.at<float>(0, j);
     dp_path[0][j] = j;
   }
   
   for (int i = 1; i < r; ++i) {
     for (int j = 0; j < c; ++j) {
-      int energy_left_upper = j - 1 >= 0 ?
+      float energy_left_upper = j - 1 >= 0 ?
           dp_mat[i - 1][j - 1] :
           std::numeric_limits<int>::max();
-      int energy_right_upper = j + 1 < c ?
+      float energy_right_upper = j + 1 < c ?
           dp_mat[i - 1][j + 1] :
           std::numeric_limits<int>::max();
-      int energy_upper = dp_mat[i - 1][j];
-      int energy_min = std::min(energy_upper,
+      float energy_upper = dp_mat[i - 1][j];
+      float energy_min = std::min(energy_upper,
           std::min(energy_left_upper, energy_right_upper));
 
       int parent_idx = j;
-      if (energy_min == energy_left_upper) {
+      if (std::fabs(energy_min - energy_left_upper) < 1e-6) {
         parent_idx = j - 1;
-      } else if (energy_min == energy_right_upper) {
+      } else if (std::fabs(energy_min - energy_right_upper) < 1e-6) {
         parent_idx = j + 1;
       }
-      dp_mat[i][j] = static_cast<int>(*(data_ptr + i * energy_map.step + j)) +
+      dp_mat[i][j] = energy_map.at<float>(i, j) +
           energy_min;
       dp_path[i][j] = parent_idx;
     }
@@ -139,8 +157,10 @@ void SeamCarver::RemoveHorizontalSeam(const std::vector<int> &seam) {
     return;
   }
   cv::transpose(carved_image_, carved_image_);
+  cv::transpose(removal_region_mask_, removal_region_mask_);
   RemoveVerticalSeam(seam);
   cv::transpose(carved_image_, carved_image_);
+  cv::transpose(removal_region_mask_, removal_region_mask_);
 }
 
 void SeamCarver::RemoveVerticalSeam(const std::vector<int> &seam) {
@@ -149,15 +169,20 @@ void SeamCarver::RemoveVerticalSeam(const std::vector<int> &seam) {
   }
   cv::Mat carved_img(carved_image_.rows, carved_image_.cols - 1,
       carved_image_.type(), cv::Scalar(0, 0, 0));
+  cv::Mat carved_mask = cv::Mat::zeros(
+      removal_region_mask_.rows, removal_region_mask_.cols - 1, CV_8UC1);
   for (int i = 0; i < carved_image_.rows; ++i) {
     for (int j = 0; j < seam[i]; ++j) {
       carved_img.at<cv::Vec3b>(i, j) = carved_image_.at<cv::Vec3b>(i, j);
+      carved_mask.at<uchar>(i, j) = removal_region_mask_.at<uchar>(i, j);
     }
     for (int j = seam[i]; j < carved_img.cols; ++j) {
       carved_img.at<cv::Vec3b>(i, j) = carved_image_.at<cv::Vec3b>(i, j + 1);
+      carved_mask.at<uchar>(i, j) = removal_region_mask_.at<uchar>(i, j + 1);
     }
   }
   carved_image_ = carved_img.clone();
+  removal_region_mask_ = carved_mask.clone();
 }
 
 }  // namespace seam_carving
