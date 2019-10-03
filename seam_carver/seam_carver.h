@@ -23,6 +23,7 @@ class SeamCarver {
   }
 
   void SetRemovalMaskByRect(const cv::Rect &rect);
+  void SetProtectionMaskByRect(const cv::Rect &rect);
 
  private:
   // reset to origin image
@@ -48,14 +49,20 @@ class SeamCarver {
   // removal_region_mask_(i, j) > 0 means (i, j) should be removed
   cv::Mat removal_region_mask_;
 
+  // protection_region_mask_(i, j) > 0 means (i, j) should be protected
+  cv::Mat protection_region_mask_;
+
   std::vector<int> cur_seam_;
+
   // DP matrix (we use dynamic programming to find the optimal seam)
   std::vector<std::vector<float> > dp_mat;
+
   // dp_path[i][j] records the `parent` index of dp_mat[i][j]
   std::vector<std::vector<int> > dp_path;
 
  private:
   static const float s_removal_energy_val_;
+  static const float s_protection_energy_val_;
 };
 
 }  // namespace seam_carving

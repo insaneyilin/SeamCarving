@@ -7,11 +7,14 @@
 namespace seam_carving {
 
 const float SeamCarver::s_removal_energy_val_ = -100.f;
+const float SeamCarver::s_protection_energy_val_ = 100.f;
 
 SeamCarver::SeamCarver(const cv::Mat &input_image) {
   origin_image_ = input_image.clone();
   carved_image_ = input_image.clone();
   removal_region_mask_ = cv::Mat::zeros(
+      origin_image_.rows, origin_image_.cols, CV_8UC1);
+  protection_region_mask_ = cv::Mat::zeros(
       origin_image_.rows, origin_image_.cols, CV_8UC1);
 }
 
@@ -55,6 +58,10 @@ void SeamCarver::SetRemovalMaskByRect(const cv::Rect &rect) {
   removal_region_mask_(rect).setTo(255);
 }
 
+void SeamCarver::SetProtectionMaskByRect(const cv::Rect &rect) {
+  protection_region_mask_(rect).setTo(255);
+}
+
 void SeamCarver::Reset() {
   carved_image_ = origin_image_.clone();
 }
@@ -78,6 +85,15 @@ void SeamCarver::CalcEnergyMap() {
     for (int j = 0; j < energy_map_.cols; ++j) {
       if (removal_region_mask_.at<uchar>(i, j) > 0) {
         energy_map_.at<float>(i, j) = s_removal_energy_val_;
+      }
+    }
+  }
+
+  // consider protection mask
+  for (int i = 0; i < energy_map_.rows; ++i) {
+    for (int j = 0; j < energy_map_.cols; ++j) {
+      if (protection_region_mask_.at<uchar>(i, j) > 0) {
+        energy_map_.at<float>(i, j) = s_protection_energy_val_;
       }
     }
   }
@@ -158,9 +174,11 @@ void SeamCarver::RemoveHorizontalSeam(const std::vector<int> &seam) {
   }
   cv::transpose(carved_image_, carved_image_);
   cv::transpose(removal_region_mask_, removal_region_mask_);
+  cv::transpose(protection_region_mask_, protection_region_mask_);
   RemoveVerticalSeam(seam);
   cv::transpose(carved_image_, carved_image_);
   cv::transpose(removal_region_mask_, removal_region_mask_);
+  cv::transpose(protection_region_mask_, protection_region_mask_);
 }
 
 void SeamCarver::RemoveVerticalSeam(const std::vector<int> &seam) {
@@ -169,20 +187,28 @@ void SeamCarver::RemoveVerticalSeam(const std::vector<int> &seam) {
   }
   cv::Mat carved_img(carved_image_.rows, carved_image_.cols - 1,
       carved_image_.type(), cv::Scalar(0, 0, 0));
-  cv::Mat carved_mask = cv::Mat::zeros(
+  cv::Mat carved_removal_mask = cv::Mat::zeros(
       removal_region_mask_.rows, removal_region_mask_.cols - 1, CV_8UC1);
+  cv::Mat carved_protection_mask = cv::Mat::zeros(
+      protection_region_mask_.rows, protection_region_mask_.cols - 1, CV_8UC1);
   for (int i = 0; i < carved_image_.rows; ++i) {
     for (int j = 0; j < seam[i]; ++j) {
       carved_img.at<cv::Vec3b>(i, j) = carved_image_.at<cv::Vec3b>(i, j);
-      carved_mask.at<uchar>(i, j) = removal_region_mask_.at<uchar>(i, j);
+      carved_removal_mask.at<uchar>(i, j) = removal_region_mask_.at<uchar>(i, j);
+      carved_protection_mask.at<uchar>(i, j) =
+          protection_region_mask_.at<uchar>(i, j);
     }
     for (int j = seam[i]; j < carved_img.cols; ++j) {
       carved_img.at<cv::Vec3b>(i, j) = carved_image_.at<cv::Vec3b>(i, j + 1);
-      carved_mask.at<uchar>(i, j) = removal_region_mask_.at<uchar>(i, j + 1);
+      carved_removal_mask.at<uchar>(i, j) =
+          removal_region_mask_.at<uchar>(i, j + 1);
+      carved_protection_mask.at<uchar>(i, j) =
+          protection_region_mask_.at<uchar>(i, j + 1);
     }
   }
   carved_image_ = carved_img.clone();
-  removal_region_mask_ = carved_mask.clone();
+  removal_region_mask_ = carved_removal_mask.clone();
+  protection_region_mask_ = carved_protection_mask.clone();
 }
 
 }  // namespace seam_carving

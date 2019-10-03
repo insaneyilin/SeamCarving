@@ -45,7 +45,10 @@ int main(int argc, char **argv) {
 
   SeamCarver seam_carver(input_img);
   if (mode == "r") {
-    seam_carver.SeamCarver::SetRemovalMaskByRect(roi_rect);
+    seam_carver.SetRemovalMaskByRect(roi_rect);
+  }
+  if (mode == "p") {
+    seam_carver.SetProtectionMaskByRect(roi_rect);
   }
   if (carve_direction == "h") {
     seam_carver.HorizontalCarving(num_seams);
