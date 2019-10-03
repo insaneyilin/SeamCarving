@@ -125,25 +125,25 @@ void SeamCarver::FindSeamWithDynamicProgramming(const cv::Mat &energy_map,
   assert(seam);
   const int r = energy_map.rows;
   const int c = energy_map.cols;
-  dp_mat.clear();
-  dp_mat.resize(r, std::vector<float>(c, 0.f));
-  dp_path.clear();
-  dp_path.resize(r, std::vector<int>(c, 0));
+  dp_mat_.clear();
+  dp_mat_.resize(r, std::vector<float>(c, 0.f));
+  dp_path_.clear();
+  dp_path_.resize(r, std::vector<int>(c, 0));
 
   for (int j = 0; j < c; ++j) {
-    dp_mat[0][j] = energy_map.at<float>(0, j);
-    dp_path[0][j] = j;
+    dp_mat_[0][j] = energy_map.at<float>(0, j);
+    dp_path_[0][j] = j;
   }
   
   for (int i = 1; i < r; ++i) {
     for (int j = 0; j < c; ++j) {
       float energy_left_upper = j - 1 >= 0 ?
-          dp_mat[i - 1][j - 1] :
+          dp_mat_[i - 1][j - 1] :
           std::numeric_limits<int>::max();
       float energy_right_upper = j + 1 < c ?
-          dp_mat[i - 1][j + 1] :
+          dp_mat_[i - 1][j + 1] :
           std::numeric_limits<int>::max();
-      float energy_upper = dp_mat[i - 1][j];
+      float energy_upper = dp_mat_[i - 1][j];
       float energy_min = std::min(energy_upper,
           std::min(energy_left_upper, energy_right_upper));
 
@@ -153,17 +153,17 @@ void SeamCarver::FindSeamWithDynamicProgramming(const cv::Mat &energy_map,
       } else if (std::fabs(energy_min - energy_right_upper) < 1e-6) {
         parent_idx = j + 1;
       }
-      dp_mat[i][j] = energy_map.at<float>(i, j) +
+      dp_mat_[i][j] = energy_map.at<float>(i, j) +
           energy_min;
-      dp_path[i][j] = parent_idx;
+      dp_path_[i][j] = parent_idx;
     }
   }
   seam->resize(r, 0);
-  int col_idx = std::min_element(dp_mat[r - 1].begin(),
-      dp_mat[r - 1].end()) - dp_mat[r - 1].begin();
+  int col_idx = std::min_element(dp_mat_[r - 1].begin(),
+      dp_mat_[r - 1].end()) - dp_mat_[r - 1].begin();
   (*seam)[r - 1] = col_idx;
   for (int k = r - 1; k > 0; --k) {
-    col_idx = dp_path[k][col_idx];
+    col_idx = dp_path_[k][col_idx];
     (*seam)[k - 1] = col_idx;
   }
 }

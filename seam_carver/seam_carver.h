@@ -55,10 +55,10 @@ class SeamCarver {
   std::vector<int> cur_seam_;
 
   // DP matrix (we use dynamic programming to find the optimal seam)
-  std::vector<std::vector<float> > dp_mat;
+  std::vector<std::vector<float> > dp_mat_;
 
   // dp_path[i][j] records the `parent` index of dp_mat[i][j]
-  std::vector<std::vector<int> > dp_path;
+  std::vector<std::vector<int> > dp_path_;
 
  private:
   static const float s_removal_energy_val_;
